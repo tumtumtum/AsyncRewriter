@@ -45,7 +45,7 @@ namespace AsyncRewriter
         /// Contains the parsed contents of the AsyncRewriterHelpers.cs file (essentially
         /// <see cref="RewriteAsync"/> which needs to always be compiled in.
         /// </summary>
-        readonly SyntaxTree _asyncHelpersSyntaxTree;
+        //readonly SyntaxTree _asyncHelpersSyntaxTree;
 
         ITypeSymbol _cancellationTokenSymbol;
 
@@ -55,16 +55,16 @@ namespace AsyncRewriter
         {
             _log = log ?? new ConsoleLoggingAdapter();
             // ReSharper disable once AssignNullToNotNullAttribute
-            using (var reader = new StreamReader(typeof(Rewriter).GetTypeInfo().Assembly.GetManifestResourceStream("AsyncRewriter.AsyncRewriterHelpers.cs")))
+            /*using (var reader = new StreamReader(typeof(Rewriter).GetTypeInfo().Assembly.GetManifestResourceStream("AsyncRewriter.AsyncRewriterHelpers.cs")))
             {
                 _asyncHelpersSyntaxTree = SyntaxFactory.ParseSyntaxTree(reader.ReadToEnd());
-            }
+            }*/
         }
 
         public string RewriteAndMerge(string[] paths, string[] additionalAssemblyNames=null, string[] excludedTypes = null)
         {
-            if (paths.All(p => Path.GetFileName(p) != "AsyncRewriterHelpers.cs"))
-                throw new ArgumentException("AsyncRewriterHelpers.cs must be included in paths", nameof(paths));
+            //if (paths.All(p => Path.GetFileName(p) != "AsyncRewriterHelpers.cs"))
+                //throw new ArgumentException("AsyncRewriterHelpers.cs must be included in paths", nameof(paths));
             Contract.EndContractBlock();
 
             var syntaxTrees = paths.Select(p => SyntaxFactory.ParseSyntaxTree(File.ReadAllText(p))).ToArray();
@@ -138,19 +138,26 @@ namespace AsyncRewriter
 
                 var usings = syntaxTree.GetCompilationUnitRoot().Usings;
 
-                var asyncRewriterUsing = usings.SingleOrDefault(u => u.Name.ToString() == "AsyncRewriter");
+                /*var asyncRewriterUsing = usings.SingleOrDefault(u => u.Name.ToString() == "AsyncRewriter");
                 if (asyncRewriterUsing == null)
                     continue;   // No "using AsyncRewriter", skip this file
+                */
+
+                if (!syntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().Any(m => m.AttributeLists.SelectMany(al => al.Attributes).Any(a => a.Name.ToString() == "RewriteAsync")))
+                {
+                    continue;
+                }
 
                 usings = usings
                     // Remove the AsyncRewriter using directive
-                    .Remove(asyncRewriterUsing)
+                    //.Remove(asyncRewriterUsing)
                     // Add the extra using directives
                     .AddRange(ExtraUsingDirectives);
 
                 // Add #pragma warning disable at the top of the file
                 usings = usings.Replace(usings[0], usings[0].WithLeadingTrivia(SyntaxFactory.Trivia(SyntaxFactory.PragmaWarningDirectiveTrivia(SyntaxFactory.Token(SyntaxKind.DisableKeyword), true))));
                     
+                
                 var namespaces = SyntaxFactory.List<MemberDeclarationSyntax>(
                     syntaxTree.GetRoot()
                     .DescendantNodes()
