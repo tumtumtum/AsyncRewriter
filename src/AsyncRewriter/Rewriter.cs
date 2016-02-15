@@ -257,9 +257,9 @@ namespace AsyncRewriter
 			var parentContainsMethodWithRewriteAsync = GetAllMembers(inMethodSymbol.ReceiverType.BaseType)
 				.Where(c => c.Name == inMethodSyntax.Identifier.Text)
 				.Any(m => m.GetAttributes().Any(a => a.AttributeClass.Name.Contains("RewriteAsync")));
-
-			// Remove the override and new attributes. Seems like the clean .Remove above doesn't work...
-			if (!(parentContainsAsyncMethod || parentContainsMethodWithRewriteAsync))
+            
+             // Remove the override and new attributes. Seems like the clean .Remove above doesn't work...
+            if (!(parentContainsAsyncMethod || parentContainsMethodWithRewriteAsync))
 			{
 			    for (var i = 0; i < outMethod.Modifiers.Count;)
 			    {
@@ -273,14 +273,27 @@ namespace AsyncRewriter
 			    }
 		    }
 
-		    var attr = inMethodSymbol.GetAttributes().Single(a => a.AttributeClass.Name.EndsWith("RewriteAsyncAttribute"));
+            var attr = inMethodSymbol.GetAttributes().Single(a => a.AttributeClass.Name.EndsWith("RewriteAsyncAttribute"));
 
-			if (attr.ConstructorArguments.Length > 0 && (bool)attr.ConstructorArguments[0].Value)
-			{
-				outMethod = outMethod.AddModifiers(SyntaxFactory.Token(SyntaxKind.OverrideKeyword));
-			}
+            if (attr.ConstructorArguments.Length > 0 && (bool)attr.ConstructorArguments[0].Value)
+            {
+                for (var i = 0; i < outMethod.Modifiers.Count;)
+                {
+                    var text = outMethod.Modifiers[i].Text;
 
-			return outMethod;
+                    if (text == "public" || text == "private" || text == "protected")
+                    {
+                        outMethod = outMethod.WithModifiers(outMethod.Modifiers.RemoveAt(i));
+                        continue;
+                    }
+
+                    i++;
+                }
+
+                outMethod = outMethod.WithModifiers(outMethod.Modifiers.Insert(0, SyntaxFactory.Token(SyntaxKind.PublicKeyword)));
+            }
+
+            return outMethod;
 		}
 
 	    private IEnumerable<ISymbol> GetAllMembers(ITypeSymbol symbol)
@@ -359,14 +372,27 @@ namespace AsyncRewriter
 				}
 			}
 
-			var attr = inMethodSymbol.GetAttributes().Single(a => a.AttributeClass.Name.Contains("RewriteAsync"));
+            var attr = inMethodSymbol.GetAttributes().Single(a => a.AttributeClass.Name.EndsWith("RewriteAsyncAttribute"));
 
-            if (attr.ConstructorArguments.Length > 0 && (bool) attr.ConstructorArguments[0].Value)
+            if (attr.ConstructorArguments.Length > 0 && (bool)attr.ConstructorArguments[0].Value)
             {
-                outMethod = outMethod.AddModifiers(SyntaxFactory.Token(SyntaxKind.OverrideKeyword));
+                for (var i = 0; i < outMethod.Modifiers.Count;)
+                {
+                    var text = outMethod.Modifiers[i].Text;
+
+                    if (text == "public" || text == "private" || text == "protected")
+                    {
+                        outMethod = outMethod.WithModifiers(outMethod.Modifiers.RemoveAt(i));
+                        continue;
+                    }
+
+                    i++;
+                }
+
+                outMethod = outMethod.WithModifiers(outMethod.Modifiers.Insert(0, SyntaxFactory.Token(SyntaxKind.PublicKeyword)));
             }
 
-           return outMethod;
+            return outMethod;
         }
     }
 
@@ -411,7 +437,7 @@ namespace AsyncRewriter
             {
                 if (_excludeTypes.Contains(syncSymbol.ContainingType))
                     return node;
-
+                
 				var asyncCandidates = syncSymbol.ContainingType.GetMembers(syncSymbol.Name + "Async").Cast<IMethodSymbol>().ToList();
 
 				// First attempt to find an async counterpart method accepting a cancellation token.
