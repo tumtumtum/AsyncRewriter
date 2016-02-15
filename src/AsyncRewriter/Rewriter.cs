@@ -253,9 +253,13 @@ namespace AsyncRewriter
 				returnType == "void" ? "Task" : $"Task<{returnType}>")
 			);
 
-			// Remove the override and new attributes. Seems like the clean .Remove above doesn't work...
+			var parentContainsAsyncMethod = GetAllMembers(inMethodSymbol.ReceiverType.BaseType).Any(c => c.Name == outMethodName);
+			var parentContainsMethodWithRewriteAsync = GetAllMembers(inMethodSymbol.ReceiverType.BaseType)
+				.Where(c => c.Name == inMethodSyntax.Identifier.Text)
+				.Any(m => m.GetAttributes().Any(a => a.AttributeClass.Name.Contains("RewriteAsync")));
 
-			if (!inMethodSymbol.ReceiverType.BaseType.GetMembers().Any(c => c.Name == outMethodName))
+			// Remove the override and new attributes. Seems like the clean .Remove above doesn't work...
+			if (!(parentContainsAsyncMethod || parentContainsMethodWithRewriteAsync))
 			{
 			    for (var i = 0; i < outMethod.Modifiers.Count;)
 			    {
@@ -278,6 +282,22 @@ namespace AsyncRewriter
 
 			return outMethod;
 		}
+
+	    private IEnumerable<ISymbol> GetAllMembers(ITypeSymbol symbol)
+	    {
+		    foreach (var member in symbol.GetMembers())
+		    {
+				yield return member;
+		    }
+
+		    if (symbol.BaseType != null)
+		    {
+			    foreach (var member in symbol.BaseType.GetMembers())
+			    {
+				    yield return member;
+			    }
+		    }
+	    }
 
 		MethodDeclarationSyntax RewriteMethodAsyncWithCancellationToken(MethodDeclarationSyntax inMethodSyntax, SemanticModel semanticModel)
 		{
@@ -319,8 +339,13 @@ namespace AsyncRewriter
                 returnType == "void" ? "Task" : $"Task<{returnType}>")
             );
 
+			var parentContainsAsyncMethod = GetAllMembers(inMethodSymbol.ReceiverType.BaseType).Any(c => c.Name == outMethodName);
+			var parentContainsMethodWithRewriteAsync = GetAllMembers(inMethodSymbol.ReceiverType.BaseType)
+				.Where(c => c.Name == inMethodSyntax.Identifier.Text)
+				.Any(m => m.GetAttributes().Any(a => a.AttributeClass.Name.Contains("RewriteAsync")));
+			
 			// Remove the override and new attributes. Seems like the clean .Remove above doesn't work...
-			if (!inMethodSymbol.ReceiverType.BaseType.GetMembers().Any(c => c.Name == outMethodName))
+			if (!(parentContainsAsyncMethod || parentContainsMethodWithRewriteAsync))
 			{
 				for (var i = 0; i < outMethod.Modifiers.Count;)
 				{
@@ -367,17 +392,9 @@ namespace AsyncRewriter
         {
             var syncSymbol = (IMethodSymbol)_model.GetSymbolInfo(node).Symbol;
 
-	        if (syncSymbol == null)
+	       if (syncSymbol == null)
 	        {
-		        _log.Info("Candidate Reason: " + _model.GetSymbolInfo(node).CandidateReason);
-	        }
-
-	        if (syncSymbol == null)
-	        {
-		        _log.Info("Skipping: " + node.ToFullString());
-				_log.Info("Skipping2: " + _model.GetSymbolInfo(node.Expression).Symbol);
-
-				return node;
+		        return node;
 	        }
 
 	        var cancellationTokenPos = -1;
@@ -437,7 +454,6 @@ namespace AsyncRewriter
                     else
                     {
 						// Couldn't find anything, don't rewrite the invocation
-						_log.Info("    Couldn't find async method for: " + syncSymbol);
 						return node;
                     }
                 }
