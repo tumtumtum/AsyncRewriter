@@ -4,6 +4,7 @@ using System.Diagnostics.Contracts;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using AsyncRewriter.Logging;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -438,7 +439,12 @@ namespace AsyncRewriter
                 if (_excludeTypes.Contains(syncSymbol.ContainingType))
                     return node;
                 
-				var asyncCandidates = syncSymbol.ContainingType.GetMembers(syncSymbol.Name + "Async").Cast<IMethodSymbol>().ToList();
+				var asyncCandidates = syncSymbol
+					.ContainingType
+					.GetMembers()
+					.Where(c => Regex.IsMatch(c.Name, syncSymbol.Name + "Async" + @"(`[0-9])?"))
+					.OfType<IMethodSymbol>()
+					.ToList();
 
 				// First attempt to find an async counterpart method accepting a cancellation token.
 				foreach (var candidate in asyncCandidates.Where(c => c.Parameters.Length == (syncSymbol.IsExtensionMethod ? syncSymbol.Parameters.Length + 2 : syncSymbol.Parameters.Length + 1)))
@@ -472,7 +478,7 @@ namespace AsyncRewriter
                     // Next attempt to find an async method with a matching parameter list with no cancellation token
                     if (asyncCandidates.Any(ms =>
                             ms.Parameters.Length == (syncSymbol.IsExtensionMethod ? syncSymbol.Parameters.Length + 1 : syncSymbol.Parameters.Length) &&
-							(syncSymbol.IsExtensionMethod ? ms.Parameters.Skip(1) : ms.Parameters).SequenceEqual(syncSymbol.Parameters)
+							(syncSymbol.IsExtensionMethod ? ms.Parameters.Skip(1) : ms.Parameters).SequenceEqual(syncSymbol.Parameters, _paramComparer)
                     ))
                     {
                         cancellationTokenPos = -1;
