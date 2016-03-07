@@ -231,17 +231,21 @@ namespace AsyncRewriter
 
 			_log.Debug("  Rewriting method {0} to {1}", inMethodSymbol.Name, outMethodName);
 
-			var methodInvocation = SyntaxFactory.InvocationExpression
-			(
-				SyntaxFactory.IdentifierName(outMethodName), 
-				SyntaxFactory.ArgumentList(new SeparatedSyntaxList<ArgumentSyntax>()
-					.AddRange(inMethodSymbol.Parameters.Select(c => SyntaxFactory.Argument(SyntaxFactory.IdentifierName(c.Name))))
-					.Add(SyntaxFactory.Argument(SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.IdentifierName("CancellationToken"), SyntaxFactory.IdentifierName("None")))))
-			);
+            var cancellation = SyntaxFactory.Argument(SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.IdentifierName("CancellationToken"), SyntaxFactory.IdentifierName("None")));
 
-			var callAsyncWithCancellationToken = methodInvocation;
+	        var parameters = inMethodSymbol.Parameters.Select(c => SyntaxFactory.Argument(SyntaxFactory.IdentifierName(c.Name))).ToList();
+
+	        parameters.Insert(inMethodSymbol.Parameters.TakeWhile(p => !p.HasExplicitDefaultValue && !p.IsParams).Count(), cancellation);
+
+            var methodInvocation = SyntaxFactory.InvocationExpression
+            (
+                SyntaxFactory.IdentifierName(outMethodName),
+                SyntaxFactory.ArgumentList(new SeparatedSyntaxList<ArgumentSyntax>().AddRange(parameters))
+            );
+
+            var callAsyncWithCancellationToken = methodInvocation;
 			
-			var outMethod = inMethodSyntax.WithBody(SyntaxFactory.Block(SyntaxFactory.ReturnStatement(callAsyncWithCancellationToken)));
+            var outMethod = inMethodSyntax.WithBody(SyntaxFactory.Block(SyntaxFactory.ReturnStatement(callAsyncWithCancellationToken)));
 
 			// Method signature
 		    outMethod = outMethod
